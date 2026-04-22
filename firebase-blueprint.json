@@ -1,0 +1,59 @@
+{
+  "entities": {
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A financial transaction (income or expense)",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The user ID who owns this transaction" },
+        "title": { "type": "string", "description": "Description of the transaction" },
+        "amount": { "type": "number", "description": "Amount of the transaction (positive for income, negative for expense)" },
+        "category": { "type": "string", "description": "Category of the transaction" },
+        "date": { "type": "string", "format": "date-time", "description": "ISO date string of the transaction" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["userId", "title", "amount", "category", "date", "createdAt"]
+    },
+    "Budget": {
+      "title": "Budget",
+      "description": "A monthly budget limit for a category",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The user ID who owns this budget" },
+        "category": { "type": "string", "description": "Category name" },
+        "limit": { "type": "number", "description": "Budget limit amount" },
+        "spent": { "type": "number", "description": "Amount spent so far" },
+        "color": { "type": "string", "description": "Color code for the UI" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["userId", "category", "limit", "spent", "color", "createdAt"]
+    },
+    "Investment": {
+      "title": "Investment",
+      "description": "A user investment",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The user ID who owns this investment" },
+        "name": { "type": "string", "description": "Name of the investment" },
+        "amount": { "type": "number", "description": "Amount invested" },
+        "type": { "type": "string", "description": "Type of investment (e.g., Renda Fixa, Ações)" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["userId", "name", "amount", "type", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/Transaction" },
+      "description": "Collection of user transactions"
+    },
+    "/budgets/{budgetId}": {
+      "schema": { "$ref": "#/entities/Budget" },
+      "description": "Collection of user budgets"
+    },
+    "/investments/{investmentId}": {
+      "schema": { "$ref": "#/entities/Investment" },
+      "description": "Collection of user investments"
+    }
+  }
+}

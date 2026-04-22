@@ -1,0 +1,5 @@
+{
+  "name": "Adielpay - Controle Financeiro",
+  "description": "Aplicativo de controle financeiro com dashboard intuitivo, integração bancária e login seguro.",
+  "requestFramePermissions": ["camera"]
+}

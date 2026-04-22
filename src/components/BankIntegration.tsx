@@ -1,0 +1,605 @@
+import React, { useState, useRef } from 'react';
+import { motion } from 'motion/react';
+import { ArrowLeft, ShieldCheck, CheckCircle2, Building2, Landmark, RefreshCw, FileUp, Trash2, Lock } from 'lucide-react';
+import Papa from 'papaparse';
+import { supabase } from '../lib/supabase';
+
+const BANKS = [
+  { id: 'nubank', name: 'Nubank', color: 'bg-[#8A05BE]', logo: 'N' },
+  { id: 'itau', name: 'Itaú', color: 'bg-[#EC7000]', logo: 'I' },
+  { id: 'bradesco', name: 'Bradesco', color: 'bg-[#CC092F]', logo: 'B' },
+  { id: 'bb', name: 'Banco do Brasil', color: 'bg-[#F9D308]', logo: 'BB', textColor: 'text-zinc-900' },
+  { id: 'santander', name: 'Santander', color: 'bg-[#EC0000]', logo: 'S' },
+  { id: 'inter', name: 'Banco Inter', color: 'bg-[#FF7A00]', logo: 'IN' },
+];
+
+interface BankIntegrationProps {
+  onBack: () => void;
+  isPremium: boolean;
+  onNavigateToPremium: () => void;
+}
+
+export function BankIntegration({ onBack, isPremium, onNavigateToPremium }: BankIntegrationProps) {
+  const [selectedBank, setSelectedBank] = useState<any>(null);
+  const [syncState, setSyncState] = useState<'idle' | 'consent' | 'login' | 'syncing' | 'success'>('idle');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  // Fake Login State
+  const [cpf, setCpf] = useState('');
+  const [password, setPassword] = useState('');
+
+  const parseAmount = (val: string) => {
+    if (!val) return 0;
+    let clean = val.toString().replace(/R\$/g, '').trim();
+    
+    if (clean.includes('.') && clean.includes(',')) {
+      const lastDot = clean.lastIndexOf('.');
+      const lastComma = clean.lastIndexOf(',');
+      if (lastComma > lastDot) {
+        clean = clean.replace(/\./g, '').replace(',', '.');
+      } else {
+        clean = clean.replace(/,/g, '');
+      }
+    } else if (clean.includes(',')) {
+      clean = clean.replace(',', '.');
+    }
+    
+    const parsed = parseFloat(clean);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  const autoCategorize = (description: string, amount: number): string => {
+    if (amount > 0) return 'Receita';
+    
+    const desc = description.toLowerCase();
+    
+    const categories = {
+      'Alimentação': ['ifood', 'rappi', 'mcdonalds', 'burger king', 'supermercado', 'mercado', 'padaria', 'restaurante', 'zé delivery', 'assai', 'carrefour', 'pao de acucar', 'extra', 'atacadao'],
+      'Transporte': ['uber', '99', 'posto', 'gasolina', 'shell', 'ipiranga', 'petrobras', 'sem parar', 'veloe', 'conectcar', '99app', 'cabify', 'estacionamento'],
+      'Moradia': ['aluguel', 'condominio', 'enel', 'sabesp', 'light', 'copel', 'sanepar', 'ceg', 'comgas'],
+      'Lazer': ['netflix', 'spotify', 'cinema', 'ingresso', 'prime video', 'hbo', 'disney', 'amazon prime', 'playstation', 'xbox', 'steam', 'nintendo'],
+      'Contas': ['vivo', 'claro', 'tim', 'oi', 'internet', 'net', 'seguro', 'faculdade', 'escola', 'curso']
+    };
+
+    for (const [category, keywords] of Object.entries(categories)) {
+      if (keywords.some(keyword => desc.includes(keyword))) {
+        return category;
+      }
+    }
+    
+    return 'Outros';
+  };
+
+  const handleResetData = async () => {
+    const isTestMode = localStorage.getItem('adielpay_test_mode') === 'true';
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user && !isTestMode) return;
+    
+    setIsResetting(true);
+    setSyncState('syncing');
+    setImportMessage('Apagando dados antigos...');
+
+    try {
+      if (isTestMode) {
+        localStorage.removeItem('adielpay_mock_txs');
+        localStorage.removeItem('adielpay_mock_budgets');
+      } else {
+        await supabase.from('transactions').delete().eq('user_id', session!.user.id);
+        await supabase.from('budgets').delete().eq('user_id', session!.user.id);
+        await supabase.from('investments').delete().eq('user_id', session!.user.id);
+      }
+      
+      setSyncState('idle');
+      setShowResetConfirm(false);
+    } catch (error: any) {
+      console.error(error);
+      alert('Erro ao zerar dados.');
+      setSyncState('idle');
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  const parseOFX = (ofxString: string) => {
+    const transactions: any[] = [];
+    const stmtTrnRegex = /<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi;
+    let match;
+    
+    while ((match = stmtTrnRegex.exec(ofxString)) !== null) {
+      const trn = match[1];
+      
+      const dateMatch = trn.match(/<DTPOSTED>([^<\r\n]+)/i);
+      const amountMatch = trn.match(/<TRNAMT>([^<\r\n]+)/i);
+      const memoMatch = trn.match(/<MEMO>([^<\r\n]+)/i) || trn.match(/<NAME>([^<\r\n]+)/i);
+      
+      if (dateMatch && amountMatch) {
+        const rawDate = dateMatch[1].trim().substring(0, 8);
+        let date = new Date().toISOString().split('T')[0] + 'T12:00:00Z'; // fallback
+        if (rawDate.length >= 8) {
+          date = `${rawDate.substring(0, 4)}-${rawDate.substring(4, 6)}-${rawDate.substring(6, 8)}T12:00:00Z`;
+        }
+        
+        const amount = parseAmount(amountMatch[1]);
+        const title = memoMatch ? memoMatch[1].trim() : 'Transação';
+        
+        transactions.push({
+          date,
+          amount: amount,
+          title: title.substring(0, 100),
+          category: autoCategorize(title, amount)
+        });
+      }
+    }
+    return transactions;
+  };
+
+  const parseCSV = (csvString: string) => {
+    return new Promise<any[]>((resolve) => {
+      Papa.parse(csvString, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          const transactions: any[] = [];
+          results.data.forEach((row: any) => {
+            const keys = Object.keys(row);
+            const dateCol = keys.find(k => /data|date|lançamento|vencimento|movimento/i.test(k));
+            const descCol = keys.find(k => /desc|hist|detalhe|memo|nome|texto/i.test(k)) || keys.find(k => !/data|date|valor|amount|saldo/i.test(k));
+            const valCol = keys.find(k => /valor|amount|saída|entrada/i.test(k));
+            
+            if (dateCol && valCol && row[valCol]) {
+              let rawDate = String(row[dateCol]).trim();
+              let formattedDate = new Date().toISOString().split('T')[0];
+              
+              if (rawDate.includes('/')) {
+                const parts = rawDate.split('/');
+                if (parts.length === 3) {
+                  // DD/MM/YYYY
+                  if (parts[2].length === 4) {
+                    formattedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                  } 
+                  // DD/MM/YY
+                  else if (parts[2].length === 2) {
+                    formattedDate = `20${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                  }
+                }
+              } else if (rawDate.includes('-')) {
+                // If it's already YYYY-MM-DD
+                formattedDate = rawDate.substring(0, 10);
+              }
+              
+              let rawVal = String(row[valCol]).trim();
+              const amount = parseAmount(rawVal);
+              
+              if (amount !== 0 || rawVal.includes('0')) {
+                const title = descCol ? String(row[descCol]).trim() : 'Transação';
+                transactions.push({
+                  date: `${formattedDate}T12:00:00Z`,
+                  amount: amount,
+                  title: title.substring(0, 100),
+                  category: autoCategorize(title, amount)
+                });
+              }
+            }
+          });
+          resolve(transactions);
+        }
+      });
+    });
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isTestMode = localStorage.getItem('adielpay_test_mode') === 'true';
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.user && !isTestMode) {
+      alert("Sessão expirou. Por favor, faça login novamente.");
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    setIsImporting(true);
+    setSyncState('syncing');
+    setImportMessage('Lendo arquivo...');
+
+    try {
+      const text = await file.text();
+      let transactions: any[] = [];
+
+      if (file.name.toLowerCase().endsWith('.ofx')) {
+        transactions = parseOFX(text);
+      } else if (file.name.toLowerCase().endsWith('.csv')) {
+        transactions = await parseCSV(text);
+      } else {
+        throw new Error('Formato não suportado. Use OFX ou CSV.');
+      }
+
+      if (transactions.length === 0) {
+        throw new Error('Nenhuma transação encontrada ou formato inválido.');
+      }
+
+      setImportMessage(`Salvando ${transactions.length} transações...`);
+
+      if (isTestMode) {
+        const mockTxs = JSON.parse(localStorage.getItem('adielpay_mock_txs') || '[]');
+        const newMockTxs = transactions.map(tx => ({
+          id: Math.random().toString(),
+          description: tx.title,
+          amount: tx.amount,
+          category: tx.category,
+          type: tx.amount > 0 ? 'income' : 'expense',
+          date: tx.date.split('T')[0]
+        }));
+        localStorage.setItem('adielpay_mock_txs', JSON.stringify([...mockTxs, ...newMockTxs]));
+      } else {
+        const batch = transactions.map(tx => ({
+          user_id: session!.user.id,
+          description: tx.title,
+          amount: tx.amount,
+          category: tx.category,
+          type: tx.amount > 0 ? 'income' : 'expense',
+          date: tx.date.split('T')[0]
+        }));
+        const { error } = await supabase.from('transactions').insert(batch);
+        if (error) throw error;
+      }
+      
+      setSyncState('success');
+    } catch (error: any) {
+      console.error(error);
+      alert(error.message || 'Erro ao importar arquivo.');
+      setSyncState('idle');
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleSelectBank = (bank: any) => {
+    if (!isPremium) {
+      onNavigateToPremium();
+      return;
+    }
+    setSelectedBank(bank);
+    setSyncState('consent');
+  };
+
+  const handleAcceptConsent = () => {
+    setSyncState('login');
+  };
+
+  const generateFakeTransactions = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+    
+    const fakeData = [
+      { title: 'Supermercado Extra', amount: -250.45, category: 'Alimentação' },
+      { title: 'Uber do mês', amount: -85.20, category: 'Transporte' },
+      { title: 'Conta de Luz', amount: -120.00, category: 'Moradia' },
+      { title: 'Netflix', amount: -39.90, category: 'Lazer' },
+      { title: 'Salário', amount: 4500.00, category: 'Receita' },
+      { title: 'Ifood', amount: -65.90, category: 'Alimentação' },
+      { title: 'Farmácia', amount: -45.00, category: 'Outros' },
+      { title: 'Gasolina', amount: -150.00, category: 'Transporte' },
+    ];
+
+    const batch = [];
+    const now = new Date();
+
+    for (let i = 0; i < 15; i++) {
+      const randomTx = fakeData[Math.floor(Math.random() * fakeData.length)];
+      const randomDaysAgo = Math.floor(Math.random() * 30);
+      const txDate = new Date(now);
+      txDate.setDate(now.getDate() - randomDaysAgo);
+
+      batch.push({
+        user_id: session.user.id,
+        description: randomTx.title,
+        category: randomTx.category,
+        amount: randomTx.amount,
+        type: randomTx.amount > 0 ? 'income' : 'expense',
+        date: txDate.toISOString().split('T')[0]
+      });
+    }
+
+    await supabase.from('transactions').insert(batch);
+  };
+
+  const handleBankLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSyncState('syncing');
+    setImportMessage(`Conectando com ${selectedBank.name}...`);
+    
+    // Simulate connection delay
+    setTimeout(async () => {
+      setImportMessage('Sincronizando transações...');
+      await generateFakeTransactions();
+      setSyncState('success');
+    }, 3000);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-50">
+      <header className="bg-slate-900/50 border-b border-slate-800 sticky top-0 z-30 backdrop-blur-md">
+        <div className="max-w-3xl mx-auto px-4 h-16 flex items-center gap-4">
+          <button 
+            onClick={() => {
+              if (syncState === 'idle' || syncState === 'success') onBack();
+              else setSyncState('idle');
+            }}
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-800 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h1 className="font-semibold text-lg">Integração Bancária</h1>
+        </div>
+      </header>
+
+      <main className="max-w-3xl mx-auto px-4 py-8">
+        {syncState === 'idle' && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-8"
+          >
+            <div className="text-center mb-10">
+              <div className="w-16 h-16 bg-zinc-800 border border-zinc-700 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+                <Landmark className="w-8 h-8 text-zinc-100" />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Open Finance Brasil</h2>
+              <p className="text-slate-400 max-w-md mx-auto">
+                Conecte suas contas bancárias para importar e categorizar suas transações automaticamente com total segurança.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {BANKS.map((bank) => (
+                <button
+                  key={bank.id}
+                  onClick={() => handleSelectBank(bank)}
+                  className="relative bg-slate-900 border border-slate-800 hover:border-cyan-500/50 rounded-2xl p-6 flex flex-col items-center gap-4 transition-all hover:scale-[1.02]"
+                >
+                  {!isPremium && (
+                    <div className="absolute top-3 right-3 bg-amber-500/10 border border-amber-500/20 p-1.5 rounded-lg" title="Recurso PRO">
+                      <Lock className="w-3 h-3 text-amber-500" />
+                    </div>
+                  )}
+                  <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold text-white shadow-lg ${bank.color} ${bank.textColor || ''}`}>
+                    {bank.logo}
+                  </div>
+                  <span className="font-medium text-sm">{bank.name}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-800"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-4 bg-slate-950 text-slate-400">Ou importe manualmente</span>
+              </div>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center">
+              <div className="w-16 h-16 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FileUp className="w-8 h-8 text-cyan-400" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Importar Extrato (OFX ou CSV)</h3>
+              <p className="text-slate-400 text-sm mb-6 max-w-sm mx-auto">
+                Acesse o internet banking ou aplicativo do seu banco, baixe o extrato do mês no formato OFX ou CSV e envie aqui.
+              </p>
+              
+              <input 
+                type="file" 
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                accept=".ofx,.csv"
+                className="hidden"
+              />
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full sm:w-auto bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold rounded-xl px-6 py-3 transition-all transform hover:scale-[1.02] active:scale-[0.98] mb-4"
+              >
+                Selecionar Arquivo
+              </button>
+
+              <div className="mt-8 pt-8 border-t border-slate-800">
+                {showResetConfirm ? (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+                    <p className="text-red-400 text-sm font-medium mb-4">
+                      Tem certeza? Isso apagará TODAS as suas transações, orçamentos e investimentos atuais. A conta ficará zerada.
+                    </p>
+                    <div className="flex gap-2 justify-center">
+                      <button 
+                        onClick={() => setShowResetConfirm(false)}
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button 
+                        onClick={handleResetData}
+                        className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors"
+                      >
+                        Sim, Zerar Tudo
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button 
+                    onClick={() => setShowResetConfirm(true)}
+                    className="flex items-center justify-center gap-2 text-sm text-red-400 hover:text-red-300 transition-colors mx-auto"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Zerar conta antes de importar
+                  </button>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {syncState === 'consent' && selectedBank && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-md mx-auto"
+          >
+            <div className="flex justify-center mb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center">
+                  <Landmark className="w-6 h-6 text-zinc-100" />
+                </div>
+                <div className="flex space-x-1">
+                  <div className="w-2 h-2 bg-slate-700 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-slate-700 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-2 h-2 bg-slate-700 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                </div>
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold text-white ${selectedBank.color} ${selectedBank.textColor || ''}`}>
+                  {selectedBank.logo}
+                </div>
+              </div>
+            </div>
+            
+            <h3 className="text-xl font-bold text-center mb-6">Consentimento Open Finance</h3>
+            
+            <div className="space-y-4 mb-8 text-sm text-slate-300">
+              <p>
+                Você está prestes a conectar sua conta do <strong>{selectedBank.name}</strong> ao Adielpay.
+              </p>
+              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                <h4 className="font-semibold text-white mb-2">O que será compartilhado:</h4>
+                <ul className="list-disc list-inside space-y-1 text-slate-400">
+                  <li>Dados cadastrais básicos</li>
+                  <li>Saldos de contas correntes</li>
+                  <li>Extrato de transações (últimos 12 meses)</li>
+                  <li>Faturas de cartão de crédito</li>
+                </ul>
+              </div>
+              <p className="text-xs text-slate-500">
+                O compartilhamento é seguro e regulamentado pelo Banco Central do Brasil. Você pode revogar este acesso a qualquer momento.
+              </p>
+            </div>
+
+            <button 
+              onClick={handleAcceptConsent}
+              className="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl px-4 py-3 transition-all"
+            >
+              Continuar para o {selectedBank.name}
+            </button>
+          </motion.div>
+        )}
+
+        {syncState === 'login' && selectedBank && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-3xl p-8 max-w-md mx-auto text-slate-900"
+          >
+            <div className="text-center mb-8">
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl font-bold text-white mx-auto mb-4 shadow-lg ${selectedBank.color} ${selectedBank.textColor || ''}`}>
+                {selectedBank.logo}
+              </div>
+              <h3 className="text-2xl font-bold">Acesse sua conta</h3>
+              <p className="text-slate-500 text-sm mt-1">Ambiente seguro {selectedBank.name}</p>
+            </div>
+
+            <form onSubmit={handleBankLogin} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">CPF</label>
+                <input 
+                  type="text" 
+                  value={cpf}
+                  onChange={(e) => setCpf(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="000.000.000-00"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Senha do App</label>
+                <input 
+                  type="password" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+              
+              <div className="flex items-center gap-2 text-xs text-slate-500 mt-4 mb-6 justify-center">
+                <Lock className="w-3 h-3" />
+                <span>Criptografia ponta-a-ponta</span>
+              </div>
+
+              <button 
+                type="submit"
+                className={`w-full text-white font-bold rounded-xl px-4 py-3 transition-all ${selectedBank.color} hover:opacity-90`}
+              >
+                Entrar e Conectar
+              </button>
+            </form>
+          </motion.div>
+        )}
+
+        {syncState === 'syncing' && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center max-w-md mx-auto"
+          >
+            <div className="relative w-24 h-24 mx-auto mb-6">
+              <div className="absolute inset-0 rounded-full border-4 border-slate-800"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-cyan-500 border-t-transparent animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <RefreshCw className="w-8 h-8 text-cyan-400 animate-pulse" />
+              </div>
+            </div>
+            <h3 className="text-xl font-semibold mb-2">
+              {isResetting ? 'Zerando Conta...' : isImporting ? 'Importando Transações...' : 'Sincronizando Dados...'}
+            </h3>
+            <p className="text-slate-400 text-sm">
+              {isResetting || isImporting ? importMessage : importMessage || 'Aguarde enquanto baixamos suas transações de forma segura.'}
+            </p>
+          </motion.div>
+        )}
+
+        {syncState === 'success' && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center max-w-md mx-auto"
+          >
+            <div className="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle2 className="w-12 h-12 text-emerald-400" />
+            </div>
+            <h3 className="text-xl font-semibold mb-2">Conexão Estabelecida!</h3>
+            <p className="text-slate-400 text-sm mb-8">
+              Suas transações foram importadas e categorizadas com sucesso pela nossa Inteligência Artificial.
+            </p>
+            <button 
+              onClick={onBack}
+              className="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl px-4 py-3 transition-all"
+            >
+              Ver Transações no Dashboard
+            </button>
+          </motion.div>
+        )}
+
+        <div className="mt-12 flex items-center justify-center gap-2 text-sm text-slate-500">
+          <ShieldCheck className="w-4 h-4" />
+          <span>Protegido por criptografia de ponta a ponta</span>
+        </div>
+      </main>
+    </div>
+  );
+}

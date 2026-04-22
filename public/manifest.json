@@ -1,0 +1,24 @@
+{
+  "name": "Adielpay - Controle Financeiro Inteligente",
+  "short_name": "Adielpay",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "description": "Seu super aplicativo financeiro. Acompanhe gastos, metas e projeções do futuro em um só lugar.",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://api.dicebear.com/7.x/identicon/svg?seed=Adielpay&backgroundColor=0284c7",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://api.dicebear.com/7.x/identicon/svg?seed=Adielpay&backgroundColor=0284c7",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
