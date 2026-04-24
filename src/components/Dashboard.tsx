@@ -92,7 +92,7 @@ export function Dashboard({
   const tourSteps: Step[] = [
     {
       target: '.tour-greeting',
-      content: 'Bem-vindo ao Adielpay! Vamos dar uma volta rápida para você conhecer as principais funcionalidades.',
+      content: 'Bem-vindo ao AdPay! Vamos dar uma volta rápida para você conhecer as principais funcionalidades.',
       disableBeacon: true,
     },
     {
@@ -562,7 +562,7 @@ export function Dashboard({
             <div className="w-8 h-8 bg-zinc-800 border border-zinc-700 rounded-lg flex items-center justify-center shadow-sm">
               <Wallet className="w-5 h-5 text-zinc-100" />
             </div>
-            <span className="font-bold text-xl tracking-tight">Adielpay</span>
+              <span className="font-futuristic font-bold text-xl">AdPay</span>
             {isPremium ? (
               <span className="bg-gradient-to-r from-amber-400 to-amber-600 text-slate-950 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ml-1">PRO</span>
             ) : (

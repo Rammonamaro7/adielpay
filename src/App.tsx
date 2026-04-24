@@ -186,7 +186,7 @@ export default function App() {
             localStorage.setItem('adielpay_premium', 'true');
             setIsPremium(true);
             setAppState('dashboard');
-            alert('Parabéns! Você agora é um usuário Adielpay PRO.');
+            alert('Parabéns! Você agora é um usuário AdPay PRO.');
           }}
         />
       )}

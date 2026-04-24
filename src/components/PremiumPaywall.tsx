@@ -37,7 +37,7 @@ export function PremiumPaywall({ onBack, onSubscribe }: PremiumPaywallProps) {
           >
             <Crown className="w-10 h-10 text-slate-950 -rotate-12" />
           </motion.div>
-          <h1 className="text-3xl font-bold mb-3">Adielpay <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-600">PRO</span></h1>
+          <h1 className="text-3xl font-futuristic font-bold mb-3">AdPay <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-600 font-sans tracking-normal">PRO</span></h1>
           <p className="text-slate-400">Desbloqueie o poder total das suas finanças com recursos exclusivos.</p>
         </div>
 

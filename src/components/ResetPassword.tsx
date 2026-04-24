@@ -78,7 +78,7 @@ export function ResetPassword({ onBackToLogin }: ResetPasswordProps) {
           </div>
         </div>
 
-        <h1 className="text-3xl font-bold text-center text-white mb-2">Adielpay</h1>
+        <h1 className="text-3xl font-futuristic font-bold text-center text-white mb-2 tracking-wide">AdPay</h1>
         
         {isVerifying ? (
           <div className="text-center py-8">

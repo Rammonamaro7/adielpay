@@ -1,12 +1,26 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+let ai: GoogleGenAI | null = null;
 
 export async function generateFinancialInsights(
   transactions: any[],
   budgets: any[],
   currentBalance: number
 ): Promise<string> {
+  if (!ai) {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
+      if (!apiKey || apiKey === "undefined") {
+        console.warn("Gemini API Key missing. Returning fallback insights.");
+        return "Configure sua chave da API Gemini para ver insights financeiros gerados por IA.";
+      }
+      ai = new GoogleGenAI({ apiKey: apiKey });
+    } catch (e) {
+      console.error("Failed to initialize Gemini:", e);
+      return "Configure sua chave da API Gemini para ver insights de IA.";
+    }
+  }
+
   const prompt = `
 Você é um consultor financeiro especialista em fintechs.
 Analise os seguintes dados financeiros do usuário e forneça 3 a 4 insights curtos, personalizados e acionáveis.
@@ -25,7 +39,7 @@ Gere insights sobre:
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.1-flash",
       contents: prompt,
     });
     return response.text || "Não foi possível gerar insights no momento.";

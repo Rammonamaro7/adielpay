@@ -473,7 +473,7 @@ export function BankIntegration({ onBack, isPremium, onNavigateToPremium }: Bank
             
             <div className="space-y-4 mb-8 text-sm text-slate-300">
               <p>
-                Você está prestes a conectar sua conta do <strong>{selectedBank.name}</strong> ao Adielpay.
+                Você está prestes a conectar sua conta do <strong>{selectedBank.name}</strong> ao <span className="font-futuristic font-bold">AdPay</span>.
               </p>
               <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
                 <h4 className="font-semibold text-white mb-2">O que será compartilhado:</h4>

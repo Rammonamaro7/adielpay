@@ -175,7 +175,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
           </div>
         </div>
 
-        <h1 className="text-3xl font-bold text-center text-white mb-2">Adielpay</h1>
+        <h1 className="text-3xl font-futuristic font-bold text-center text-white mb-2 tracking-wide">AdPay</h1>
         <p className="text-slate-400 text-center mb-8">
           {step === 'credentials' && 'Sua vida financeira no controle'}
           {step === 'register' && 'Crie sua conta e comece agora'}

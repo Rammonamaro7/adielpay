@@ -40,7 +40,7 @@ export const registerBiometrics = async (userEmail: string, userName: string) =>
   const credential = await navigator.credentials.create({
     publicKey: {
       challenge,
-      rp: { name: "Adielpay", id: window.location.hostname },
+      rp: { name: "AdPay", id: window.location.hostname },
       user: {
         id: userId,
         name: userEmail,
