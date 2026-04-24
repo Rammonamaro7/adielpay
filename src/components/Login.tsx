@@ -261,47 +261,6 @@ export function Login({ onLoginSuccess }: LoginProps) {
                 Entrar com Google
               </button>
 
-              <button 
-                type="button"
-                onClick={() => {
-                  try {
-                    setStep('success');
-                    localStorage.setItem('adielpay_test_mode', 'true');
-                    
-                    if (!localStorage.getItem('adielpay_mock_txs')) {
-                      const today = new Date();
-                      const mockTxs = [
-                        { id: '1', description: 'Salário', amount: 5500, category: 'Salário', type: 'income', date: today.toISOString().split('T')[0] },
-                        { id: '2', description: 'Mercado Carrefour', amount: -650.30, category: 'Alimentação', type: 'expense', date: new Date(today.getTime() - 86400000 * 2).toISOString().split('T')[0] },
-                        { id: '3', description: 'Uber', amount: -35.50, category: 'Transporte', type: 'expense', date: new Date(today.getTime() - 86400000 * 3).toISOString().split('T')[0] },
-                        { id: '4', description: 'Conta de Energia', amount: -180.20, category: 'Contas', type: 'expense', date: new Date(today.getTime() - 86400000 * 5).toISOString().split('T')[0] },
-                        { id: '5', description: 'Restaurante', amount: -120.00, category: 'Lazer', type: 'expense', date: new Date(today.getTime() - 86400000 * 6).toISOString().split('T')[0] },
-                        { id: '6', description: 'Aluguel', amount: -1500.00, category: 'Moradia', type: 'expense', date: new Date(today.getTime() - 86400000 * 10).toISOString().split('T')[0] },
-                        { id: '7', description: 'Rendimento CDI', amount: 45.20, category: 'Rendimentos', type: 'income', date: new Date(today.getTime() - 86400000 * 15).toISOString().split('T')[0] },
-                      ];
-                      localStorage.setItem('adielpay_mock_txs', JSON.stringify(mockTxs));
-                      
-                      const mockBudgets = [
-                        { id: '1', category: 'Alimentação', limit_amount: 1000 },
-                        { id: '2', category: 'Lazer', limit_amount: 500 },
-                        { id: '3', category: 'Transporte', limit_amount: 400 },
-                      ];
-                      localStorage.setItem('adielpay_mock_budgets', JSON.stringify(mockBudgets));
-                    }
-
-                    setTimeout(() => {
-                      onLoginSuccess('Usuário de Teste');
-                    }, 1000);
-                  } catch (e: any) {
-                    alert('Erro no modo teste: ' + e.message);
-                    setStep('identify');
-                  }
-                }}
-                className="w-full mt-3 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-400 font-semibold rounded-xl px-4 py-3 flex items-center justify-center gap-2 transition-all"
-              >
-                Entrar sem senha (Modo Teste)
-              </button>
-
               <div className="text-center mt-6">
                 <p className="text-sm text-slate-400">
                   Ainda não tem uma conta?{' '}
