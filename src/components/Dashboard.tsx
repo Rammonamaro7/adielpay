@@ -13,7 +13,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { generateFinancialInsights } from '../lib/gemini';
 import Markdown from 'react-markdown';
-import { Joyride, Step, CallBackProps, STATUS } from 'react-joyride';
+import { Joyride, Step, STATUS } from 'react-joyride';
 
 const RECENT_TRANSACTIONS: any[] = [];
 
@@ -93,7 +93,6 @@ export function Dashboard({
     {
       target: '.tour-greeting',
       content: 'Bem-vindo ao AdPay! Vamos dar uma volta rápida para você conhecer as principais funcionalidades.',
-      disableBeacon: true,
     },
     {
       target: '.tour-balance',
@@ -117,7 +116,7 @@ export function Dashboard({
     }
   ];
 
-  const handleJoyrideCallback = (data: CallBackProps) => {
+  const handleJoyrideCallback = (data: any) => {
     const { status } = data;
     const finishedStatuses: string[] = [STATUS.FINISHED, STATUS.SKIPPED];
 
@@ -147,9 +146,13 @@ export function Dashboard({
     const isTestMode = localStorage.getItem('adielpay_test_mode') === 'true';
     if (isTestMode) {
       const mockTxs = JSON.parse(localStorage.getItem('adielpay_mock_txs') || '[]');
+      const normalizedMockTxs = mockTxs.map((tx: any) => ({
+        ...tx,
+        amount: tx.type === 'expense' ? -Math.abs(tx.amount) : Math.abs(tx.amount)
+      }));
       // Sort by date descending
-      mockTxs.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      setTransactions(mockTxs);
+      normalizedMockTxs.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setTransactions(normalizedMockTxs);
       return;
     }
     if (!uid) return;
@@ -159,7 +162,11 @@ export function Dashboard({
       .eq('user_id', uid)
       .order('date', { ascending: false });
     if (!error && data) {
-      setTransactions(data);
+      const normalizedData = data.map(tx => ({
+        ...tx,
+        amount: tx.type === 'expense' ? -Math.abs(tx.amount) : Math.abs(tx.amount)
+      }));
+      setTransactions(normalizedData);
     }
   };
 
@@ -225,7 +232,7 @@ export function Dashboard({
   const openEditModal = (budget: Budget) => {
     setEditingBudgetId(budget.id);
     setNewBudgetCategory(budget.category);
-    setNewBudgetLimit(budget.limit.toString());
+    setNewBudgetLimit(budget.limit_amount.toString());
     setIsBudgetModalOpen(true);
   };
 
@@ -511,17 +518,17 @@ export function Dashboard({
         steps={tourSteps}
         run={runTour}
         continuous={true}
-        showProgress={true}
-        showSkipButton={true}
-        callback={handleJoyrideCallback}
+        onEvent={handleJoyrideCallback}
+        options={{
+          primaryColor: '#3b82f6', // blue-500
+          textColor: '#0f172a', // slate-900
+          backgroundColor: '#ffffff',
+          arrowColor: '#ffffff',
+          overlayColor: 'rgba(0, 0, 0, 0.5)',
+          showProgress: true,
+          buttons: ['back', 'close', 'next', 'skip'] as any
+        }}
         styles={{
-          options: {
-            primaryColor: '#3b82f6', // blue-500
-            textColor: '#0f172a', // slate-900
-            backgroundColor: '#ffffff',
-            arrowColor: '#ffffff',
-            overlayColor: 'rgba(0, 0, 0, 0.5)',
-          },
           beaconInner: {
             backgroundColor: '#60a5fa', // blue-400
           },
@@ -533,7 +540,7 @@ export function Dashboard({
             borderRadius: '16px',
             padding: '24px',
           },
-          buttonNext: {
+          buttonPrimary: {
             backgroundColor: '#3b82f6',
             borderRadius: '8px',
             padding: '8px 16px',
@@ -958,8 +965,8 @@ export function Dashboard({
             </div>
             <div className="space-y-6">
               {budgetsWithSpent.map((budget) => {
-                const percent = Math.min((budget.spent / budget.limit) * 100, 100);
-                const isOver = budget.spent > budget.limit;
+                const percent = Math.min((budget.spent / budget.limit_amount) * 100, 100);
+                const isOver = budget.spent > budget.limit_amount;
                 return (
                   <div key={budget.id} className="group">
                     <div className="flex justify-between text-sm mb-2">
@@ -969,7 +976,7 @@ export function Dashboard({
                       </span>
                       <div className="flex items-center gap-3">
                         <span className="text-slate-500">
-                          <span className={isOver ? 'text-red-500 font-medium' : 'text-slate-900'}>R$ {budget.spent.toFixed(2).replace('.', ',')}</span> / R$ {budget.limit.toFixed(2).replace('.', ',')}
+                          <span className={isOver ? 'text-red-500 font-medium' : 'text-slate-900'}>R$ {budget.spent.toFixed(2).replace('.', ',')}</span> / R$ {budget.limit_amount.toFixed(2).replace('.', ',')}
                         </span>
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button onClick={() => openEditModal(budget)} className="p-1 text-slate-400 hover:text-blue-600 transition-colors" title="Editar">

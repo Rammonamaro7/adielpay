@@ -37,8 +37,12 @@ export function Transactions({ onBack }: TransactionsProps) {
     const isTestMode = localStorage.getItem('adielpay_test_mode') === 'true';
     if (isTestMode) {
       const mockTxs = JSON.parse(localStorage.getItem('adielpay_mock_txs') || '[]');
-      mockTxs.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      setTransactions(mockTxs);
+      const normalizedMockTxs = mockTxs.map((tx: any) => ({
+        ...tx,
+        amount: tx.type === 'expense' ? -Math.abs(tx.amount) : Math.abs(tx.amount)
+      }));
+      normalizedMockTxs.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setTransactions(normalizedMockTxs);
       return;
     }
 
@@ -49,7 +53,11 @@ export function Transactions({ onBack }: TransactionsProps) {
       .eq('user_id', uid)
       .order('date', { ascending: false });
     if (!error && data) {
-      setTransactions(data);
+      const normalizedData = data.map(tx => ({
+        ...tx,
+        amount: tx.type === 'expense' ? -Math.abs(tx.amount) : Math.abs(tx.amount)
+      }));
+      setTransactions(normalizedData);
     }
   };
 

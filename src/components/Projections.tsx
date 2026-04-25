@@ -20,7 +20,11 @@ export function Projections({ onBack }: ProjectionsProps) {
       const isTestMode = localStorage.getItem('adielpay_test_mode') === 'true';
       if (isTestMode) {
         const mockTxs = JSON.parse(localStorage.getItem('adielpay_mock_txs') || '[]');
-        setTransactions(mockTxs);
+        const normalizedMockTxs = mockTxs.map((tx: any) => ({
+          ...tx,
+          amount: tx.type === 'expense' ? -Math.abs(tx.amount) : Math.abs(tx.amount)
+        }));
+        setTransactions(normalizedMockTxs);
         return;
       }
 
@@ -31,7 +35,13 @@ export function Projections({ onBack }: ProjectionsProps) {
           .select('*')
           .eq('user_id', session.user.id)
           .order('date', { ascending: true });
-        if (data) setTransactions(data);
+        if (data) {
+          const normalizedData = data.map(tx => ({
+            ...tx,
+            amount: tx.type === 'expense' ? -Math.abs(tx.amount) : Math.abs(tx.amount)
+          }));
+          setTransactions(normalizedData);
+        }
       }
     };
     fetchTransactions();

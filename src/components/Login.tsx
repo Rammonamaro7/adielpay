@@ -80,12 +80,12 @@ export function Login({ onLoginSuccess }: LoginProps) {
     if (recoveryEmail) {
       try {
         const { error } = await supabase.auth.resetPasswordForEmail(recoveryEmail, {
-          redirectTo: `${window.location.origin}/#type=recovery`,
+          redirectTo: `${window.location.origin}?type=recovery`, // often simpler than hash because Vite routers sometimes eat hashes, but still use origin if they set it up
         });
         if (error) throw error;
         setStep('forgot-password-success');
       } catch (error: any) {
-        setForgotPasswordError('Erro ao enviar email. Verifique se o endereço está correto.');
+        setForgotPasswordError(`Erro ao enviar email: ${error.message || 'Verifique se o endereço está correto e as permissões de URL configuradas no Supabase.'}`);
       }
     }
   };

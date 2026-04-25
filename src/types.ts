@@ -1,6 +1,6 @@
 export interface Transaction {
   id: string;
-  title: string;
+  description: string;
   amount: number;
   type: 'income' | 'expense';
   category: string;
@@ -10,7 +10,7 @@ export interface Transaction {
 export interface Budget {
   id: string;
   category: string;
-  limit: number;
+  limit_amount: number;
   spent: number;
   color: string;
 }

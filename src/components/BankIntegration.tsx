@@ -32,9 +32,18 @@ export function BankIntegration({ onBack, isPremium, onNavigateToPremium }: Bank
   const [cpf, setCpf] = useState('');
   const [password, setPassword] = useState('');
 
-  const parseAmount = (val: string) => {
+  const parseAmount = (val: string, isExplicitDebit = false) => {
     if (!val) return 0;
-    let clean = val.toString().replace(/R\$/g, '').trim();
+    
+    if (typeof val === 'string' && val.match(/\d{2}\/\d{2}\/\d{4}/)) return 0;
+    
+    const lowerVal = val.toString().toLowerCase();
+    const isCreditFlag = lowerVal.includes('credito') || lowerVal.includes('crédito') || lowerVal.includes('entrada') || /\bc\s*$/i.test(lowerVal);
+    const isDebitFlag = lowerVal.includes('debito') || lowerVal.includes('débito') || lowerVal.includes('saida') || lowerVal.includes('saída') || /\bd\s*$/i.test(lowerVal);
+    
+    const isDebit = isExplicitDebit || (!isCreditFlag && (isDebitFlag || /-|-\s*R\$|\(.*\)/i.test(val)));
+    
+    let clean = val.toString().replace(/[^\d.,-]/g, '').trim();
     
     if (clean.includes('.') && clean.includes(',')) {
       const lastDot = clean.lastIndexOf('.');
@@ -48,8 +57,14 @@ export function BankIntegration({ onBack, isPremium, onNavigateToPremium }: Bank
       clean = clean.replace(',', '.');
     }
     
-    const parsed = parseFloat(clean);
-    return isNaN(parsed) ? 0 : parsed;
+    let parsed = parseFloat(clean);
+    if (isNaN(parsed)) return 0;
+    
+    if (isDebit && parsed > 0) {
+        parsed = -parsed;
+    }
+    
+    return parsed;
   };
 
   const autoCategorize = (description: string, amount: number): string => {
@@ -106,12 +121,10 @@ export function BankIntegration({ onBack, isPremium, onNavigateToPremium }: Bank
 
   const parseOFX = (ofxString: string) => {
     const transactions: any[] = [];
-    const stmtTrnRegex = /<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi;
-    let match;
+    const parts = ofxString.split(/<STMTTRN>/i);
+    if (parts.length <= 1) return transactions;
     
-    while ((match = stmtTrnRegex.exec(ofxString)) !== null) {
-      const trn = match[1];
-      
+    parts.slice(1).forEach((trn) => {
       const dateMatch = trn.match(/<DTPOSTED>([^<\r\n]+)/i);
       const amountMatch = trn.match(/<TRNAMT>([^<\r\n]+)/i);
       const memoMatch = trn.match(/<MEMO>([^<\r\n]+)/i) || trn.match(/<NAME>([^<\r\n]+)/i);
@@ -126,61 +139,117 @@ export function BankIntegration({ onBack, isPremium, onNavigateToPremium }: Bank
         const amount = parseAmount(amountMatch[1]);
         const title = memoMatch ? memoMatch[1].trim() : 'Transação';
         
-        transactions.push({
-          date,
-          amount: amount,
-          title: title.substring(0, 100),
-          category: autoCategorize(title, amount)
-        });
+        if (!isNaN(amount) && amount !== 0 && Math.abs(amount) < 100000000) {
+          transactions.push({
+            date,
+            amount: amount,
+            title: title.substring(0, 100),
+            category: autoCategorize(title, amount)
+          });
+        }
       }
-    }
+    });
     return transactions;
   };
 
   const parseCSV = (csvString: string) => {
     return new Promise<any[]>((resolve) => {
+      const delimiter = csvString.includes(';') && !csvString.includes(',') ? ';' : ',';
+      
       Papa.parse(csvString, {
-        header: true,
+        header: false,
         skipEmptyLines: true,
+        delimiter: delimiter,
         complete: (results) => {
-          const transactions: any[] = [];
-          results.data.forEach((row: any) => {
-            const keys = Object.keys(row);
-            const dateCol = keys.find(k => /data|date|lançamento|vencimento|movimento/i.test(k));
-            const descCol = keys.find(k => /desc|hist|detalhe|memo|nome|texto/i.test(k)) || keys.find(k => !/data|date|valor|amount|saldo/i.test(k));
-            const valCol = keys.find(k => /valor|amount|saída|entrada/i.test(k));
+          let transactions: any[] = [];
+          let headerRowIdx = -1;
+          
+          for (let i = 0; i < Math.min(10, results.data.length); i++) {
+            const rowStr = String(results.data[i]).toLowerCase();
+            if (rowStr.match(/data|date|lançamento|vencimento|movimento/i) && 
+                rowStr.match(/valor|amount|saída|entrada|crédito|débito/i)) {
+              headerRowIdx = i;
+              break;
+            }
+          }
+          
+          let dataToProcess = [];
+          let headers: string[] = [];
+          
+          if (headerRowIdx !== -1) {
+            headers = (results.data[headerRowIdx] as string[]).map(h => String(h).trim().toLowerCase());
+            dataToProcess = results.data.slice(headerRowIdx + 1);
+          } else {
+            dataToProcess = results.data;
+          }
+
+          dataToProcess.forEach((row: any) => {
+            if (!Array.isArray(row) || row.length < 2) return;
             
-            if (dateCol && valCol && row[valCol]) {
-              let rawDate = String(row[dateCol]).trim();
+            let dateVal = '';
+            let valVal = '';
+            let descVal = '';
+            let isExplicitDebit = false;
+
+            if (headers.length > 0) {
+              const dateIdx = headers.findIndex(k => /data|date|lançamento|vencimento|movimento/i.test(k));
+              const valIdx = headers.findIndex(k => /valor|amount/i.test(k));
+              const debitIdx = headers.findIndex(k => /saída|débito/i.test(k));
+              const creditIdx = headers.findIndex(k => /entrada|crédito/i.test(k));
+              
+              const descIdx = headers.findIndex(k => /desc|hist|detalhe|memo|nome|texto/i.test(k)) || 
+                              headers.findIndex(k => !/data|date|valor|amount|saldo|crédito|débito|saída|entrada/i.test(k) && k !== headers[dateIdx]);
+
+              dateVal = dateIdx !== -1 ? String(row[dateIdx] || '') : '';
+              descVal = descIdx !== -1 ? String(row[descIdx] || '') : 'Transação';
+
+              if (valIdx !== -1) {
+                valVal = String(row[valIdx] || '');
+              } else if (debitIdx !== -1 && row[debitIdx] && String(row[debitIdx]).trim() !== '' && String(row[debitIdx]).trim() !== '0') {
+                valVal = String(row[debitIdx]);
+                isExplicitDebit = true;
+              } else if (creditIdx !== -1 && row[creditIdx]) {
+                valVal = String(row[creditIdx]);
+              }
+            } else {
+              dateVal = String(row[0] || '');
+              if (row.length === 2) {
+                valVal = String(row[1] || '');
+                descVal = 'Transação';
+              } else {
+                descVal = String(row[1] || '');
+                valVal = String(row[2] || row[row.length - 1] || '');
+              }
+            }
+
+            dateVal = dateVal.trim();
+            valVal = valVal.trim();
+            
+            if (dateVal && valVal) {
               let formattedDate = new Date().toISOString().split('T')[0];
               
-              if (rawDate.includes('/')) {
-                const parts = rawDate.split('/');
-                if (parts.length === 3) {
-                  // DD/MM/YYYY
+              if (dateVal.includes('/')) {
+                const parts = dateVal.split('/');
+                if (parts.length >= 3) {
                   if (parts[2].length === 4) {
                     formattedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
                   } 
-                  // DD/MM/YY
                   else if (parts[2].length === 2) {
                     formattedDate = `20${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
                   }
                 }
-              } else if (rawDate.includes('-')) {
-                // If it's already YYYY-MM-DD
-                formattedDate = rawDate.substring(0, 10);
+              } else if (dateVal.includes('-')) {
+                formattedDate = dateVal.substring(0, 10);
               }
               
-              let rawVal = String(row[valCol]).trim();
-              const amount = parseAmount(rawVal);
+              const amount = parseAmount(valVal, isExplicitDebit);
               
-              if (amount !== 0 || rawVal.includes('0')) {
-                const title = descCol ? String(row[descCol]).trim() : 'Transação';
+              if (!isNaN(amount) && amount !== 0 && Math.abs(amount) < 100000000) {
                 transactions.push({
                   date: `${formattedDate}T12:00:00Z`,
                   amount: amount,
-                  title: title.substring(0, 100),
-                  category: autoCategorize(title, amount)
+                  title: descVal.substring(0, 100).trim() || 'Transação',
+                  category: autoCategorize(descVal, amount)
                 });
               }
             }

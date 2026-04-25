@@ -46,9 +46,10 @@ export default function App() {
       console.error("Local storage error:", e);
     }
 
-    // Check if we are on a password reset URL (Supabase uses #access_token=...&type=recovery)
+    // Check if we are on a password reset URL (Supabase uses #access_token=...&type=recovery or ?type=recovery)
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const type = hashParams.get('type');
+    const searchParams = new URLSearchParams(window.location.search);
+    const type = hashParams.get('type') || searchParams.get('type');
     
     if (type === 'recovery') {
       setAppState('reset-password');

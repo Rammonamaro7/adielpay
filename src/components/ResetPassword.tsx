@@ -17,16 +17,32 @@ export function ResetPassword({ onBackToLogin }: ResetPasswordProps) {
   const [isVerifying, setIsVerifying] = useState(true);
 
   useEffect(() => {
-    // Supabase handles the token verification automatically when redirected with #access_token
-    // We just need to check if we have a session
+    // Escuta mudanças de estado pois a sessão pode demorar um pouco para ser estabelecida
+    // logo após o redirecionamento com o token na URL
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        setIsVerifying(false);
+        setError('');
+      }
+    });
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         setIsVerifying(false);
       } else {
-        setError('Sessão de recuperação inválida ou expirada.');
-        setIsVerifying(false);
+        // give it a short delay just in case the auth event is still processing the URL hash
+        setTimeout(() => {
+          supabase.auth.getSession().then(({ data: { session: delayedSession } }) => {
+            if (!delayedSession) {
+              setError('Sessão de recuperação inválida ou expirada. Peça um novo link.');
+              setIsVerifying(false);
+            }
+          });
+        }, 1500);
       }
     });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
