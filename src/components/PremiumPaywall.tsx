@@ -90,7 +90,20 @@ export function PremiumPaywall({ onBack, onSubscribe }: PremiumPaywallProps) {
         </div>
 
         <button 
-          onClick={onSubscribe}
+          onClick={() => {
+            const link = plan === 'monthly' 
+              ? import.meta.env.VITE_PAYMENT_LINK_MONTHLY || 'https://mpago.la/11hwkv5'
+              : import.meta.env.VITE_PAYMENT_LINK_YEARLY || 'https://mpago.la/2c5SBiz';
+              
+            if (link) {
+              window.open(link, '_blank');
+              // Permite verificar o acesso (para fins de protótipo)
+              alert("Importante: Use no pagamento o MESMO E-MAIL que você usa no aplicativo. Após finalizar a compra, aguarde alguns instantes e atualize a página para o sistema reconhecer seu pagamento!");
+            } else {
+              alert("Por favor, adicione os links de pagamento (VITE_PAYMENT_LINK_MONTHLY e VITE_PAYMENT_LINK_YEARLY) nas configurações da plataforma para que os pagamentos caiam na sua conta.\n\nSimulando assinatura premium para testes...");
+              onSubscribe();
+            }
+          }}
           className="w-full bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-slate-950 font-bold text-lg rounded-2xl px-4 py-4 transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-xl shadow-amber-500/20"
         >
           Assinar Agora

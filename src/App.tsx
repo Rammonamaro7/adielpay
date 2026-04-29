@@ -61,6 +61,13 @@ export default function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUserName(session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Usuário');
+        
+        // Check for premium status in user metadata
+        if (session.user.user_metadata?.is_premium) {
+          setIsPremium(true);
+          try { localStorage.setItem('adielpay_premium', 'true'); } catch(e) {}
+        }
+
         if (isBiometricsEnabled()) {
           setAppState('locked');
         } else {
@@ -77,7 +84,12 @@ export default function App() {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      const isTestModeActive = localStorage.getItem('adielpay_test_mode') === 'true';
+      let isTestModeActive = false;
+      try {
+        isTestModeActive = localStorage.getItem('adielpay_test_mode') === 'true';
+      } catch (e) {
+        // ignore
+      }
       if (isTestModeActive) return;
 
       if (event === 'PASSWORD_RECOVERY') {
@@ -88,6 +100,13 @@ export default function App() {
 
       if (session?.user) {
         setUserName(session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Usuário');
+        
+        // Check for premium status in user metadata
+        if (session.user.user_metadata?.is_premium) {
+          setIsPremium(true);
+          try { localStorage.setItem('adielpay_premium', 'true'); } catch(e) {}
+        }
+
         if (isBiometricsEnabled() && appState === 'login') {
           setAppState('locked');
         } else if (appState === 'login' || appState === 'reset-password') {

@@ -63,7 +63,7 @@ export function Investments({ onBack }: InvestmentsProps) {
     });
   }, []);
 
-  const totalPatrimony = investments.reduce((acc, inv) => acc + inv.amount, 0);
+  const totalPatrimony = investments.reduce((acc, inv) => acc + Math.round(inv.amount * 100), 0) / 100;
 
   const handleAddInvestment = async (e: React.FormEvent) => {
     e.preventDefault();

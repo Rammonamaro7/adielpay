@@ -84,7 +84,7 @@ export function Reports({ onBack, isPremium, onNavigateToPremium }: ReportsProps
   const expenseDataMap: Record<string, number> = {};
   filteredTransactions.forEach(tx => {
     if (tx.amount < 0) {
-      expenseDataMap[tx.category] = (expenseDataMap[tx.category] || 0) + Math.abs(tx.amount);
+      expenseDataMap[tx.category] = Math.round(((expenseDataMap[tx.category] || 0) + Math.abs(tx.amount)) * 100) / 100;
     }
   });
 
@@ -92,8 +92,8 @@ export function Reports({ onBack, isPremium, onNavigateToPremium }: ReportsProps
     .map(([name, value]) => ({ name, value, color: CATEGORY_COLORS[name] || CATEGORY_COLORS['Outros'] }))
     .sort((a, b) => b.value - a.value);
 
-  const totalIncome = filteredTransactions.filter(tx => tx.amount > 0).reduce((acc, tx) => acc + tx.amount, 0);
-  const totalExpense = filteredTransactions.filter(tx => tx.amount < 0).reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+  const totalIncome = filteredTransactions.filter(tx => tx.amount > 0).reduce((acc, tx) => acc + Math.round(tx.amount * 100), 0) / 100;
+  const totalExpense = filteredTransactions.filter(tx => tx.amount < 0).reduce((acc, tx) => acc + Math.round(Math.abs(tx.amount) * 100), 0) / 100;
   const balance = totalIncome - totalExpense;
 
   const exportToPDF = () => {
@@ -201,6 +201,14 @@ export function Reports({ onBack, isPremium, onNavigateToPremium }: ReportsProps
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-8">
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-left">
+          <p className="text-amber-400 text-xs sm:text-sm font-medium leading-relaxed">
+            <strong className="block mb-1">Aviso sobre Exportações:</strong>
+            Os valores exportados podem apresentar variações de alguns décimos ou centavos em 
+            relação ao seu banco devido a arredondamentos numéricos aplicados na importação/exportação CSV/OFX.
+          </p>
+        </div>
+
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h2 className="text-2xl font-bold">Resumo Financeiro</h2>

@@ -373,7 +373,7 @@ export function Dashboard({
     const actualBalance = parseFloat(clean);
     if (isNaN(actualBalance)) return;
 
-    const difference = actualBalance - totalBalance;
+    const difference = Math.round((actualBalance - totalBalance) * 100) / 100;
 
     if (Math.abs(difference) > 0.001) {
       try {
@@ -409,19 +409,21 @@ export function Dashboard({
     return budgets.map(budget => {
       const spent = filteredTransactions
         .filter(tx => tx.category === budget.category && tx.amount < 0)
-        .reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+        .reduce((acc, tx) => acc + Math.round(Math.abs(tx.amount) * 100), 0) / 100;
       return { ...budget, spent };
     });
   }, [budgets, filteredTransactions]);
 
-  const totalBalance = transactions.reduce((acc, tx) => acc + tx.amount, 0); // Total balance is all time
-  const totalIncome = filteredTransactions.filter(tx => tx.amount > 0).reduce((acc, tx) => acc + tx.amount, 0);
-  const totalExpense = filteredTransactions.filter(tx => tx.amount < 0).reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+  let totalBalance = transactions.reduce((acc, tx) => acc + Math.round(tx.amount * 100), 0) / 100; // Total balance is all time
+  if (Math.abs(totalBalance) < 0.001) totalBalance = 0; // Previne -0 do javascript
+
+  const totalIncome = filteredTransactions.filter(tx => tx.amount > 0).reduce((acc, tx) => acc + Math.round(tx.amount * 100), 0) / 100;
+  const totalExpense = filteredTransactions.filter(tx => tx.amount < 0).reduce((acc, tx) => acc + Math.round(Math.abs(tx.amount) * 100), 0) / 100;
 
   const expenseDataMap: Record<string, number> = {};
   filteredTransactions.forEach(tx => {
     if (tx.amount < 0) {
-      expenseDataMap[tx.category] = (expenseDataMap[tx.category] || 0) + Math.abs(tx.amount);
+      expenseDataMap[tx.category] = Math.round(((expenseDataMap[tx.category] || 0) + Math.abs(tx.amount)) * 100) / 100;
     }
   });
 
@@ -446,7 +448,7 @@ export function Dashboard({
     
     let cumulativeBalance = transactions
       .filter(tx => new Date(tx.date) < sixMonthsAgo)
-      .reduce((acc, tx) => acc + tx.amount, 0);
+      .reduce((acc, tx) => acc + Math.round(tx.amount * 100), 0) / 100;
 
     for (let i = 5; i >= 0; i--) {
       const d = new Date();
@@ -455,8 +457,8 @@ export function Dashboard({
       const monthName = d.toLocaleString('pt-BR', { month: 'short' });
       
       const monthTxs = transactions.filter(tx => tx.date && tx.date.substring(0, 7) === monthStr);
-      const rec = monthTxs.filter(tx => tx.amount > 0).reduce((acc, tx) => acc + tx.amount, 0);
-      const des = monthTxs.filter(tx => tx.amount < 0).reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+      const rec = monthTxs.filter(tx => tx.amount > 0).reduce((acc, tx) => acc + Math.round(tx.amount * 100), 0) / 100;
+      const des = monthTxs.filter(tx => tx.amount < 0).reduce((acc, tx) => acc + Math.round(Math.abs(tx.amount) * 100), 0) / 100;
       
       cumulativeBalance += (rec - des);
       
@@ -708,7 +710,7 @@ export function Dashboard({
             <div className="flex items-center gap-3 mb-2 relative z-10">
               <p className={`text-3xl font-bold text-slate-900 ${!isBalanceVisible ? 'tracking-widest' : ''}`}>
                 {isBalanceVisible 
-                  ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalBalance)
+                  ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(totalBalance))
                   : 'R$ •••••'}
               </p>
               <button 

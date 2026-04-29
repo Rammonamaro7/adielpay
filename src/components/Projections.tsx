@@ -81,7 +81,7 @@ export function Projections({ onBack }: ProjectionsProps) {
       
       // Calculate actual mapped sum for the day
       const dayTxs = currentMonthTxs.filter(tx => tx.date === dateStr && tx.amount < 0);
-      const daySpend = dayTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+      const daySpend = dayTxs.reduce((sum, tx) => sum + Math.round(Math.abs(tx.amount) * 100), 0) / 100;
       
       if (day <= currentDay) {
         accumulatedExpense += daySpend;

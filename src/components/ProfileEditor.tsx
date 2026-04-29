@@ -220,7 +220,7 @@ export function ProfileEditor({ userName, onSave, onBack }: ProfileEditorProps) 
               </div>
             )}
 
-            <div className="pt-4">
+            <div className="pt-4 flex gap-2">
               <button 
                 type="submit"
                 disabled={isSaving}

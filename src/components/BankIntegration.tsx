@@ -21,7 +21,7 @@ interface BankIntegrationProps {
 
 export function BankIntegration({ onBack, isPremium, onNavigateToPremium }: BankIntegrationProps) {
   const [selectedBank, setSelectedBank] = useState<any>(null);
-  const [syncState, setSyncState] = useState<'idle' | 'consent' | 'login' | 'syncing' | 'success'>('idle');
+  const [syncState, setSyncState] = useState<'idle' | 'consent' | 'login' | 'syncing' | 'success' | 'maintenance'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importMessage, setImportMessage] = useState('');
@@ -43,7 +43,7 @@ export function BankIntegration({ onBack, isPremium, onNavigateToPremium }: Bank
     
     const isDebit = isExplicitDebit || (!isCreditFlag && (isDebitFlag || /-|-\s*R\$|\(.*\)/i.test(val)));
     
-    let clean = val.toString().replace(/[^\d.,-]/g, '').trim();
+    let clean = val.toString().replace(/[^\d.,]/g, '').trim();
     
     if (clean.includes('.') && clean.includes(',')) {
       const lastDot = clean.lastIndexOf('.');
@@ -54,7 +54,21 @@ export function BankIntegration({ onBack, isPremium, onNavigateToPremium }: Bank
         clean = clean.replace(/,/g, '');
       }
     } else if (clean.includes(',')) {
-      clean = clean.replace(',', '.');
+      const parts = clean.split(',');
+      if (parts.length > 2) {
+        clean = clean.replace(/,/g, '');
+      } else if (parts.length === 2 && parts[1].length === 3) {
+        clean = clean.replace(/,/g, '');
+      } else {
+        clean = clean.replace(',', '.');
+      }
+    } else if (clean.includes('.')) {
+      const parts = clean.split('.');
+      if (parts.length > 2) {
+        clean = clean.replace(/\./g, '');
+      } else if (parts.length === 2 && parts[1].length === 3) {
+        clean = clean.replace(/\./g, '');
+      }
     }
     
     let parsed = parseFloat(clean);
@@ -64,7 +78,7 @@ export function BankIntegration({ onBack, isPremium, onNavigateToPremium }: Bank
         parsed = -parsed;
     }
     
-    return parsed;
+    return Math.round(parsed * 100) / 100;
   };
 
   const autoCategorize = (description: string, amount: number): string => {
@@ -154,12 +168,9 @@ export function BankIntegration({ onBack, isPremium, onNavigateToPremium }: Bank
 
   const parseCSV = (csvString: string) => {
     return new Promise<any[]>((resolve) => {
-      const delimiter = csvString.includes(';') && !csvString.includes(',') ? ';' : ',';
-      
       Papa.parse(csvString, {
         header: false,
         skipEmptyLines: true,
-        delimiter: delimiter,
         complete: (results) => {
           let transactions: any[] = [];
           let headerRowIdx = -1;
@@ -175,6 +186,9 @@ export function BankIntegration({ onBack, isPremium, onNavigateToPremium }: Bank
           
           let dataToProcess = [];
           let headers: string[] = [];
+          
+          let latestDateMs = 0;
+          let finalSaldo: number | null = null;
           
           if (headerRowIdx !== -1) {
             headers = (results.data[headerRowIdx] as string[]).map(h => String(h).trim().toLowerCase());
@@ -212,13 +226,28 @@ export function BankIntegration({ onBack, isPremium, onNavigateToPremium }: Bank
                 valVal = String(row[creditIdx]);
               }
             } else {
-              dateVal = String(row[0] || '');
-              if (row.length === 2) {
-                valVal = String(row[1] || '');
-                descVal = 'Transação';
+              const rowStrs = row.map((c: any) => String(c).trim());
+              const possibleDateIdx = rowStrs.findIndex(c => c.match(/^\d{2}[\/\-]\d{2}[\/\-]\d{2,4}$/) || c.match(/^\d{4}-\d{2}-\d{2}$/));
+              if (possibleDateIdx !== -1) {
+                 dateVal = rowStrs[possibleDateIdx];
+                 const possibleAmounts = rowStrs.filter((c: string, idx: number) => idx !== possibleDateIdx && c.match(/^[+-]?\s*R?\$?\s*\d+([.,]\d+)*\s*([+-]|[CDcd])?\s*$/) && !c.match(/^\d{2}[\/\-]\d{2}[\/\-]\d{2,4}$/));
+                 if (possibleAmounts.length > 0) {
+                   valVal = possibleAmounts[possibleAmounts.length - 1];
+                   const otherStrings = rowStrs.filter((c: string, idx: number) => idx !== possibleDateIdx && c !== valVal && c !== '');
+                   descVal = otherStrings.length > 0 ? otherStrings.join(' - ') : 'Transação';
+                 } else {
+                    valVal = String(row[1] || '');
+                    descVal = String(row[2] || 'Transação');
+                 }
               } else {
-                descVal = String(row[1] || '');
-                valVal = String(row[2] || row[row.length - 1] || '');
+                dateVal = String(row[0] || '');
+                if (row.length === 2) {
+                  valVal = String(row[1] || '');
+                  descVal = 'Transação';
+                } else {
+                  descVal = String(row[1] || '');
+                  valVal = String(row[2] || row[row.length - 1] || '');
+                }
               }
             }
 
@@ -251,9 +280,24 @@ export function BankIntegration({ onBack, isPremium, onNavigateToPremium }: Bank
                   title: descVal.substring(0, 100).trim() || 'Transação',
                   category: autoCategorize(descVal, amount)
                 });
+                
+                if (headers.length > 0) {
+                  const saldoIdx = headers.findIndex(k => /saldo/i.test(k));
+                  if (saldoIdx !== -1 && row[saldoIdx]) {
+                    const sAmount = parseAmount(String(row[saldoIdx]));
+                    if (!isNaN(sAmount)) {
+                      const dMs = new Date(`${formattedDate}T12:00:00Z`).getTime();
+                      if (dMs >= latestDateMs) {
+                        latestDateMs = dMs;
+                        finalSaldo = sAmount;
+                      }
+                    }
+                  }
+                }
               }
             }
           });
+          
           resolve(transactions);
         }
       });
@@ -289,15 +333,65 @@ export function BankIntegration({ onBack, isPremium, onNavigateToPremium }: Bank
         throw new Error('Formato não suportado. Use OFX ou CSV.');
       }
 
-      if (transactions.length === 0) {
-        throw new Error('Nenhuma transação encontrada ou formato inválido.');
+      let reportedBalance: number | null = null;
+      let balanceDate: string = new Date().toISOString().split('T')[0];
+      
+      const balanceTxIndex = transactions.findIndex(t => t._isReportedBalance);
+      if (balanceTxIndex !== -1) {
+        reportedBalance = transactions[balanceTxIndex].amount;
+        balanceDate = transactions[balanceTxIndex].date.split('T')[0];
+        transactions.splice(balanceTxIndex, 1);
       }
 
-      setImportMessage(`Salvando ${transactions.length} transações...`);
+      if (file.name.toLowerCase().endsWith('.ofx')) {
+        const balamtMatch = text.match(/<BALAMT>([^<\r\n]+)/i);
+        if (balamtMatch) {
+          reportedBalance = parseAmount(balamtMatch[1]);
+          const dtMatch = text.match(/<DTASOF>([^<\r\n]+)/i);
+          if (dtMatch) {
+            const rawDate = dtMatch[1].trim().substring(0, 8);
+            if (rawDate.length >= 8) balanceDate = `${rawDate.substring(0, 4)}-${rawDate.substring(4, 6)}-${rawDate.substring(6, 8)}`;
+          }
+        }
+      }
+
+      if (transactions.length === 0) {
+        console.log("Conteúdo do arquivo processado: ", text.substring(0, 500));
+        throw new Error('Nenhuma transação encontrada ou formato não reconhecido. Certifique-se de que é um CSV com colunas de Data, Descrição e Valor ou OFX válido.');
+      }
+
+      setImportMessage(`Verificando transações duplicadas...`);
+      
+      let existingTxs: any[] = [];
+      if (isTestMode) {
+        existingTxs = JSON.parse(localStorage.getItem('adielpay_mock_txs') || '[]');
+      } else {
+        const { data: currentTxs, error: fetchErr } = await supabase.from('transactions').select('*').eq('user_id', session!.user.id);
+        if (!fetchErr && currentTxs) {
+          existingTxs = currentTxs;
+        }
+      }
+
+      const newTransactions = transactions.filter(t => {
+        const tDate = t.date.split('T')[0];
+        const tTitle = t.title.toLowerCase().trim();
+        return !existingTxs.some(ex => {
+          // Compare dates properly
+          const exDate = ex.date ? ex.date.split('T')[0] : '';
+          const exTitle = (ex.description || '').toLowerCase().trim();
+          return exDate === tDate && Math.abs((ex.amount || 0) - t.amount) < 0.001 && exTitle === tTitle;
+        });
+      });
+
+      if (newTransactions.length === 0) {
+        throw new Error('Todas as transações deste arquivo já foram importadas anteriormente.');
+      }
+
+      setImportMessage(`Salvando ${newTransactions.length} transações...`);
 
       if (isTestMode) {
         const mockTxs = JSON.parse(localStorage.getItem('adielpay_mock_txs') || '[]');
-        const newMockTxs = transactions.map(tx => ({
+        const newMockTxs = newTransactions.map(tx => ({
           id: Math.random().toString(),
           description: tx.title,
           amount: tx.amount,
@@ -307,7 +401,7 @@ export function BankIntegration({ onBack, isPremium, onNavigateToPremium }: Bank
         }));
         localStorage.setItem('adielpay_mock_txs', JSON.stringify([...mockTxs, ...newMockTxs]));
       } else {
-        const batch = transactions.map(tx => ({
+        const batch = newTransactions.map(tx => ({
           user_id: session!.user.id,
           description: tx.title,
           amount: tx.amount,
@@ -333,12 +427,8 @@ export function BankIntegration({ onBack, isPremium, onNavigateToPremium }: Bank
   };
 
   const handleSelectBank = (bank: any) => {
-    if (!isPremium) {
-      onNavigateToPremium();
-      return;
-    }
     setSelectedBank(bank);
-    setSyncState('consent');
+    setSyncState('maintenance');
   };
 
   const handleAcceptConsent = () => {
@@ -467,6 +557,15 @@ export function BankIntegration({ onBack, isPremium, onNavigateToPremium }: Bank
                 Acesse o internet banking ou aplicativo do seu banco, baixe o extrato do mês no formato OFX ou CSV e envie aqui.
               </p>
               
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-6 text-left">
+                <p className="text-amber-400 text-xs sm:text-sm font-medium leading-relaxed">
+                  <strong className="block mb-1">Atenção:</strong>
+                  Ao importar seu extrato, os valores e totais podem apresentar algumas pequenas variações (décimos/centavos) em relação ao saldo oficial do seu banco. 
+                  Isso ocorre devido a arredondamentos aplicados pelo próprio arquivo do banco e diferença no modo em que datas ou taxas são exportadas. 
+                  Mas fique tranquilo, **os valores de cada transação podem ser ajustados manualmente** sempre que necessário no painel.
+                </p>
+              </div>
+
               <input 
                 type="file" 
                 ref={fileInputRef}
@@ -660,6 +759,34 @@ export function BankIntegration({ onBack, isPremium, onNavigateToPremium }: Bank
               className="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl px-4 py-3 transition-all"
             >
               Ver Transações no Dashboard
+            </button>
+          </motion.div>
+        )}
+
+        {syncState === 'maintenance' && selectedBank && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex flex-col items-center justify-center py-10 text-center max-w-md mx-auto"
+          >
+            <div className="w-20 h-20 bg-slate-900 border border-slate-800 rounded-3xl flex items-center justify-center mb-6 relative shadow-lg">
+              <div className={`w-12 h-12 ${selectedBank.color} rounded-xl flex items-center justify-center text-xl font-bold ${selectedBank.textColor || 'text-white'}`}>
+                {selectedBank.logo}
+              </div>
+            </div>
+            
+            <h2 className="text-2xl font-bold text-slate-100 mb-3">Em Manutenção</h2>
+            <p className="text-slate-400 mb-8 leading-relaxed">
+              A integração automática com o <span className="font-semibold text-slate-300">{selectedBank.name}</span> está recebendo novas atualizações. Em breve, ela estará disponível novamente.
+              <br /><br />
+              Por enquanto, você pode <span className="font-semibold text-cyan-400">importar seu extrato OFX ou CSV</span> manualmente e nossa I.A fará o resto!
+            </p>
+            
+            <button 
+              onClick={() => setSyncState('idle')}
+              className="px-6 py-3 border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-xl font-medium transition-colors w-full"
+            >
+              Voltar
             </button>
           </motion.div>
         )}

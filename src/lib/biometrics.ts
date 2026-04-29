@@ -93,9 +93,17 @@ export const authenticateBiometrics = async () => {
 };
 
 export const disableBiometrics = () => {
-  localStorage.removeItem('adielpay_biometric_id');
+  try {
+    localStorage.removeItem('adielpay_biometric_id');
+  } catch (e) {
+    console.error(e);
+  }
 };
 
 export const isBiometricsEnabled = () => {
-  return !!localStorage.getItem('adielpay_biometric_id');
+  try {
+    return !!localStorage.getItem('adielpay_biometric_id');
+  } catch (e) {
+    return false;
+  }
 };
