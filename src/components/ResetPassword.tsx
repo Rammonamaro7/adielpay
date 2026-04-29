@@ -32,12 +32,7 @@ export function ResetPassword({ onBackToLogin }: ResetPasswordProps) {
       } else {
         // give it a short delay just in case the auth event is still processing the URL hash
         setTimeout(() => {
-          supabase.auth.getSession().then(({ data: { session: delayedSession } }) => {
-            if (!delayedSession) {
-              setError('Sessão de recuperação inválida ou expirada. Peça um novo link.');
-              setIsVerifying(false);
-            }
-          });
+          setIsVerifying(false);
         }, 1500);
       }
     });
@@ -137,7 +132,7 @@ export function ResetPassword({ onBackToLogin }: ResetPasswordProps) {
                   <input 
                     type={showPassword ? "text" : "password"} 
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => { setPassword(e.target.value); setError(''); }}
                     className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 pl-4 pr-11 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent transition-all"
                     placeholder="••••••••"
                     required
@@ -158,7 +153,7 @@ export function ResetPassword({ onBackToLogin }: ResetPasswordProps) {
                   <input 
                     type={showConfirmPassword ? "text" : "password"} 
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onChange={(e) => { setConfirmPassword(e.target.value); setError(''); }}
                     className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 pl-4 pr-11 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent transition-all"
                     placeholder="••••••••"
                     required
@@ -176,7 +171,6 @@ export function ResetPassword({ onBackToLogin }: ResetPasswordProps) {
               <div className="space-y-3 mt-6">
                 <button 
                   type="submit"
-                  disabled={!!error}
                   className="w-full bg-zinc-100 hover:bg-white text-zinc-900 font-semibold rounded-xl px-4 py-3 flex items-center justify-center gap-2 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Salvar Nova Senha <ArrowRight className="w-5 h-5" />
