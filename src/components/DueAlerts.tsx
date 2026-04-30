@@ -50,6 +50,13 @@ export function DueAlerts({ transactions }: DueAlertsProps) {
     transactions?.forEach(tx => {
       if (tx.type !== 'expense') return; // only care about expenses/installments
 
+      const isParcelada = /\(\d+\/\d+\)/.test(tx.description);
+      const isFixooOuVariavel = tx.description.includes('[Fixo]') || tx.description.includes('[Variável]');
+
+      if (!isParcelada && !isFixooOuVariavel) {
+        return; // Only alert for tagged or installment expenses
+      }
+
       const txDatePart = tx.date.split('-'); // YYYY-MM-DD
       const txDate = new Date(parseInt(txDatePart[0]), parseInt(txDatePart[1]) - 1, parseInt(txDatePart[2]));
       txDate.setHours(0, 0, 0, 0);

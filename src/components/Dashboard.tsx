@@ -431,7 +431,10 @@ export function Dashboard({
     });
   }, [budgets, filteredTransactions]);
 
-  let totalBalance = transactions.reduce((acc, tx) => acc + Math.round(tx.amount * 100), 0) / 100; // Total balance is all time
+  const todayStr = new Date().toISOString().split('T')[0];
+  let totalBalance = transactions
+    .filter(tx => tx.date && tx.date <= todayStr)
+    .reduce((acc, tx) => acc + Math.round(tx.amount * 100), 0) / 100; // Total balance is all time up to today
   if (Math.abs(totalBalance) < 0.001) totalBalance = 0; // Previne -0 do javascript
 
   const totalIncome = filteredTransactions.filter(tx => tx.amount > 0).reduce((acc, tx) => acc + Math.round(tx.amount * 100), 0) / 100;
@@ -640,8 +643,36 @@ export function Dashboard({
         <div className="flex flex-col gap-6">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
-              <h1 className="tour-greeting text-3xl font-bold text-slate-900">Olá, {userName}</h1>
-              <p className="text-slate-500 mt-1">Aqui está o resumo das suas finanças hoje.</p>
+              <h1 className="tour-greeting text-2xl md:text-3xl font-bold text-slate-50 mb-4">{userName}</h1>
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-base font-medium text-slate-300 uppercase tracking-wider">Saldo em conta</span>
+                  <button 
+                    onClick={() => setIsBalanceVisible(!isBalanceVisible)}
+                    className="p-1 flex items-center justify-center hover:bg-slate-800 rounded-full text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                    title={isBalanceVisible ? "Ocultar saldo" : "Mostrar saldo"}
+                  >
+                    {isBalanceVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <div className="flex items-center gap-3">
+                  <p className={`tour-balance text-base font-medium text-slate-200 ${!isBalanceVisible ? 'tracking-widest' : ''}`}>
+                    {isBalanceVisible 
+                      ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalBalance)
+                      : 'R$ •••••'}
+                  </p>
+                  <button 
+                    onClick={() => {
+                      setActualBalanceInput(totalBalance.toFixed(2).replace('.', ','));
+                      setIsAdjustBalanceModalOpen(true);
+                    }}
+                    className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 hover:text-white transition-colors cursor-pointer"
+                    title="Ajustar Saldo"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </div>
             <div className="flex items-center gap-3">
               <div className="relative">
@@ -708,48 +739,7 @@ export function Dashboard({
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="tour-balance bg-white border border-slate-200 rounded-2xl p-6 relative overflow-hidden shadow-sm"
-          >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl -mr-10 -mt-10 z-0"></div>
-            <div className="flex items-center justify-between mb-4 relative z-10">
-              <h3 className="text-slate-500 font-medium">Conta</h3>
-              <button 
-                onClick={() => setIsBalanceVisible(!isBalanceVisible)}
-                className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-                title={isBalanceVisible ? "Ocultar saldo" : "Mostrar saldo"}
-              >
-                {isBalanceVisible ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
-            </div>
-            <div className="flex items-center gap-3 mb-2 relative z-10">
-              <p className={`text-3xl font-bold text-slate-900 ${!isBalanceVisible ? 'tracking-widest' : ''}`}>
-                {isBalanceVisible 
-                  ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(totalBalance))
-                  : 'R$ •••••'}
-              </p>
-              <button 
-                onClick={() => {
-                  setActualBalanceInput(totalBalance.toFixed(2).replace('.', ','));
-                  setIsAdjustBalanceModalOpen(true);
-                }}
-                className="p-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
-                title="Ajustar Saldo"
-              >
-                <Pencil className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="flex items-center gap-2 text-sm relative z-10">
-              <span className="flex items-center text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                <ArrowUpRight className="w-3 h-3 mr-1" /> 0.0%
-              </span>
-              <span className="text-slate-400">vs. mês passado</span>
-            </div>
-          </motion.div>
-
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1316,7 +1306,7 @@ export function Dashboard({
                     <input 
                       type="number" 
                       min="1"
-                      max="48"
+                      max="360"
                       value={newExpenseInstallments}
                       onChange={(e) => setNewExpenseInstallments(Math.max(1, parseInt(e.target.value) || 1))}
                       className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
