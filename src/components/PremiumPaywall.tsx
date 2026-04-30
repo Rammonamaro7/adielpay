@@ -108,6 +108,13 @@ export function PremiumPaywall({ onBack, onSubscribe }: PremiumPaywallProps) {
         >
           Assinar Agora
         </button>
+
+        <button 
+          onClick={onSubscribe}
+          className="w-full mt-4 bg-slate-800 hover:bg-slate-700 text-amber-500 font-medium text-sm rounded-2xl px-4 py-3 transition-colors border border-amber-500/30"
+        >
+          Ativar Premium (Período de Teste Grátis)
+        </button>
       </main>
     </div>
   );
