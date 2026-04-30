@@ -82,11 +82,26 @@ export function Reports({ onBack, isPremium, onNavigateToPremium }: ReportsProps
   }, [transactions, selectedMonth]);
 
   const expenseDataMap: Record<string, number> = {};
+  let totalFixed = 0;
+  let totalVariable = 0;
+
   filteredTransactions.forEach(tx => {
     if (tx.amount < 0) {
-      expenseDataMap[tx.category] = Math.round(((expenseDataMap[tx.category] || 0) + Math.abs(tx.amount)) * 100) / 100;
+      const amount = Math.abs(tx.amount);
+      expenseDataMap[tx.category] = Math.round(((expenseDataMap[tx.category] || 0) + amount) * 100) / 100;
+      
+      if (tx.description?.includes('[Fixo]')) {
+        totalFixed += amount;
+      } else {
+        totalVariable += amount;
+      }
     }
   });
+
+  const TYPE_DATA = [
+     { name: 'Gastos Fixos', value: Math.round(totalFixed * 100) / 100, color: '#3b82f6' }, // blue-500
+     { name: 'Gastos Variáveis', value: Math.round(totalVariable * 100) / 100, color: '#f59e0b' } // amber-500
+  ].filter(d => d.value > 0);
 
   const EXPENSE_DATA = Object.entries(expenseDataMap)
     .map(([name, value]) => ({ name, value, color: CATEGORY_COLORS[name] || CATEGORY_COLORS['Outros'] }))
@@ -327,6 +342,55 @@ export function Reports({ onBack, isPremium, onNavigateToPremium }: ReportsProps
             )}
           </motion.div>
         </div>
+
+        {/* Fixo vs Variável */}
+        <div className="grid grid-cols-1">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="bg-slate-900 border border-slate-800 rounded-3xl p-6"
+          >
+            <div className="flex items-center gap-2 mb-6">
+              <PieChartIcon className="w-5 h-5 text-indigo-400" />
+              <h3 className="font-semibold text-lg">Classificação de Gastos (Fixo vs Variável)</h3>
+            </div>
+            
+            {TYPE_DATA.length > 0 ? (
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={TYPE_DATA}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                      label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                    >
+                      {TYPE_DATA.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip 
+                      formatter={(value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
+                      contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '0.75rem', color: '#f8fafc' }}
+                      itemStyle={{ color: '#f8fafc' }}
+                    />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-64 flex items-center justify-center text-slate-500">
+                Sem despesas classificadas.
+              </div>
+            )}
+          </motion.div>
+        </div>
+
       </main>
     </div>
   );
