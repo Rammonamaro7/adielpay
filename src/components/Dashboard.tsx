@@ -8,12 +8,13 @@ import {
   Wallet, TrendingUp, TrendingDown, CreditCard, 
   ArrowUpRight, ArrowDownRight, Plus, Landmark,
   Coffee, ShoppingBag, Car, Home, Zap, Target, X, Pencil, Trash2, Calendar, LogOut, FileText, Sparkles,
-  Eye, EyeOff, QrCode, Barcode, ArrowRightLeft
+  Eye, EyeOff, QrCode, Barcode, ArrowRightLeft, Users
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { generateFinancialInsights } from '../lib/gemini';
 import Markdown from 'react-markdown';
 import { DueAlerts } from './DueAlerts';
+import { FamilySharingModal } from './FamilySharingModal';
 import { Joyride, Step, STATUS } from 'react-joyride';
 
 const RECENT_TRANSACTIONS: any[] = [];
@@ -85,6 +86,7 @@ export function Dashboard({
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
   const [userId, setUserId] = useState<string | null>(null);
+  const [isFamilyModalOpen, setIsFamilyModalOpen] = useState(false);
   
   const [runTour, setRunTour] = useState(() => {
     return localStorage.getItem('adielpay_tour_completed') !== 'true';
@@ -136,8 +138,7 @@ export function Dashboard({
     if (!uid) return;
     const { data, error } = await supabase
       .from('budgets')
-      .select('*')
-      .eq('user_id', uid);
+      .select('*');
     if (!error && data) {
       setBudgets(data);
     }
@@ -160,7 +161,6 @@ export function Dashboard({
     const { data, error } = await supabase
       .from('transactions')
       .select('*')
-      .eq('user_id', uid)
       .order('date', { ascending: false });
     if (!error && data) {
       const normalizedData = data.map(tx => ({
@@ -537,6 +537,17 @@ export function Dashboard({
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 pb-20 md:pb-6">
       <DueAlerts transactions={transactions} />
+      {userId && (
+        <FamilySharingModal 
+          isOpen={isFamilyModalOpen} 
+          onClose={() => setIsFamilyModalOpen(false)} 
+          userId={userId} 
+          onSettingsChanged={() => {
+             fetchTransactions(userId);
+             fetchBudgets(userId);
+          }} 
+        />
+      )}
       <Joyride
         steps={tourSteps}
         run={runTour}
@@ -626,6 +637,13 @@ export function Dashboard({
               <div className="w-full h-full rounded-full bg-slate-900 border-2 border-transparent overflow-hidden">
                 <img src="https://picsum.photos/seed/user/100/100" alt="User" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               </div>
+            </button>
+            <button 
+              onClick={() => setIsFamilyModalOpen(true)}
+              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors text-slate-500 hover:text-blue-500"
+              title="Acesso Família"
+            >
+              <Users className="w-5 h-5" />
             </button>
             <button 
               onClick={handleLogout}
