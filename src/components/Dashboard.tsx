@@ -204,6 +204,11 @@ export function Dashboard({
   
   const [newExpenseTitle, setNewExpenseTitle] = useState('');
   const [newExpenseAmount, setNewExpenseAmount] = useState('');
+  const [newExpenseDate, setNewExpenseDate] = useState(() => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().split('T')[0];
+  });
   const [newExpenseCategory, setNewExpenseCategory] = useState('Alimentação');
   const [isAddingCustomCategoryExpense, setIsAddingCustomCategoryExpense] = useState(false);
   const [customCategoryInputExpense, setCustomCategoryInputExpense] = useState('');
@@ -322,7 +327,7 @@ export function Dashboard({
     const finalAmountPerInstallment = isReceita ? amount : -(amount / newExpenseInstallments);
 
     const txsToInsert = [];
-    const baseDate = new Date();
+    const baseDate = new Date(newExpenseDate + 'T12:00:00');
 
     for (let i = 0; i < (isReceita ? 1 : newExpenseInstallments); i++) {
         const txDate = new Date(baseDate);
@@ -360,6 +365,11 @@ export function Dashboard({
       setIsExpenseModalOpen(false);
       setNewExpenseTitle('');
       setNewExpenseAmount('');
+      setNewExpenseDate(() => {
+        const d = new Date();
+        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        return d.toISOString().split('T')[0];
+      });
       setNewExpenseCategory('Alimentação');
       setIsAddingCustomCategoryExpense(false);
       setCustomCategoryInputExpense('');
@@ -1269,18 +1279,30 @@ export function Dashboard({
                   required
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Valor (R$)</label>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  min="0.01"
-                  value={newExpenseAmount}
-                  onChange={(e) => setNewExpenseAmount(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
-                  placeholder="Ex: 150.00"
-                  required
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Valor (R$)</label>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    min="0.01"
+                    value={newExpenseAmount}
+                    onChange={(e) => setNewExpenseAmount(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+                    placeholder="Ex: 150.00"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Data</label>
+                  <input 
+                    type="date" 
+                    value={newExpenseDate}
+                    onChange={(e) => setNewExpenseDate(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+                    required
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Categoria</label>
